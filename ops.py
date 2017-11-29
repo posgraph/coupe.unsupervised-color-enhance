@@ -26,6 +26,13 @@ def conv2d(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="con
                             weights_initializer=tf.truncated_normal_initializer(stddev=stddev),
                             biases_initializer=None)
 
+def conv2d_last(input_, output_dim, ks=4, s=2, stddev=0.02, padding='SAME', name="conv2d_last"):
+    with tf.variable_scope(name):
+        values = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.]
+        return slim.conv2d(input_, output_dim, ks, s, padding=padding, activation_fn=None,
+                            weights_initializer=tf.truncated_normal_initializer(stddev=stddev),
+                            biases_initializer=tf.constant_initializer(values))
+
 def deconv2d(input_, output_dim, ks=4, s=2, stddev=0.02, name="deconv2d"):
     with tf.variable_scope(name):
         return slim.conv2d_transpose(input_, output_dim, ks, s, padding='SAME', activation_fn=None,

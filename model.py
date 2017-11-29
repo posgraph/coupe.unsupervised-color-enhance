@@ -14,15 +14,18 @@ class cyclegan(object):
     def __init__(self, sess, args):
         self.sess = sess
         self.batch_size = args.batch_size
+        self.load_size = args.load_size
         self.image_size = args.fine_size
         self.input_c_dim = args.input_nc
         self.output_c_dim = args.output_nc
         self.L1_lambda = args.L1_lambda
         self.dataset_dir = args.dataset_dir
+        self.dataset_root = args.dataset_root
+        self.model_dir = args.model_dir
 
         self.discriminator = discriminator
         if args.use_resnet:
-            self.generator = generator_resnet
+            self.generator = generator_resnet_affine
         else:
             self.generator = generator_unet
         if args.use_lsgan:
@@ -56,6 +59,7 @@ class cyclegan(object):
 
         self.DB_fake = self.discriminator(self.fake_B, self.options, reuse=False, name="discriminatorB")
         self.DA_fake = self.discriminator(self.fake_A, self.options, reuse=False, name="discriminatorA")
+        # self.DB_fake_global = self.discriminator_g(self.fake_B, self.options, reuse=False, name="discriminatorB_global")
         self.g_loss_a2b = self.criterionGAN(self.DB_fake, tf.ones_like(self.DB_fake)) \
             + self.L1_lambda * abs_criterion(self.real_A, self.fake_A_) \
             + self.L1_lambda * abs_criterion(self.real_B, self.fake_B_)
@@ -104,10 +108,10 @@ class cyclegan(object):
         )
 
         self.test_A = tf.placeholder(tf.float32,
-                                     [None, self.image_size, self.image_size,
+                                     [None, None, None,
                                       self.input_c_dim], name='test_A')
         self.test_B = tf.placeholder(tf.float32,
-                                     [None, self.image_size, self.image_size,
+                                     [None, None, None,
                                       self.output_c_dim], name='test_B')
         self.testB = self.generator(self.test_A, self.options, True, name="generatorA2B")
         self.testA = self.generator(self.test_B, self.options, True, name="generatorB2A")
@@ -139,8 +143,8 @@ class cyclegan(object):
                 print(" [!] Load failed...")
 
         for epoch in range(args.epoch):
-            dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/trainA'))
-            dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/trainB'))
+            dataA = glob('{}/{}/*.*'.format(self.dataset_root, self.dataset_dir + '/trainA'))
+            dataB = glob('{}/{}/*.*'.format(self.dataset_root, self.dataset_dir + '/trainB'))
             np.random.shuffle(dataA)
             np.random.shuffle(dataB)
             batch_idxs = min(min(len(dataA), len(dataB)), args.train_size) // self.batch_size
@@ -180,7 +184,7 @@ class cyclegan(object):
 
     def save(self, checkpoint_dir, step):
         model_name = "cyclegan.model"
-        model_dir = "%s_%s" % (self.dataset_dir, self.image_size)
+        model_dir = self.model_dir #"%s_%s" % (self.dataset_dir, self.image_size)
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
         if not os.path.exists(checkpoint_dir):
@@ -193,7 +197,7 @@ class cyclegan(object):
     def load(self, checkpoint_dir):
         print(" [*] Reading checkpoint...")
 
-        model_dir = "%s_%s" % (self.dataset_dir, self.image_size)
+        model_dir = self.model_dir #"%s_%s" % (self.dataset_dir, self.image_size)
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
@@ -205,12 +209,12 @@ class cyclegan(object):
             return False
 
     def sample_model(self, sample_dir, epoch, idx):
-        dataA = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
-        dataB = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
+        dataA = glob('{}/{}/*.*'.format(self.dataset_root, self.dataset_dir + '/testA'))
+        dataB = glob('{}/{}/*.*'.format(self.dataset_root, self.dataset_dir + '/testB'))
         np.random.shuffle(dataA)
         np.random.shuffle(dataB)
         batch_files = list(zip(dataA[:self.batch_size], dataB[:self.batch_size]))
-        sample_images = [load_train_data(batch_file, is_testing=True) for batch_file in batch_files]
+        sample_images = [load_train_data(batch_file, self.load_size, self.image_size, is_testing=True) for batch_file in batch_files]
         sample_images = np.array(sample_images).astype(np.float32)
 
         fake_A, fake_B = self.sess.run(
@@ -227,9 +231,9 @@ class cyclegan(object):
         init_op = tf.global_variables_initializer()
         self.sess.run(init_op)
         if args.which_direction == 'AtoB':
-            sample_files = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testA'))
+            sample_files = glob('{}/{}/*.png'.format(self.dataset_root, self.dataset_dir + '/testA'))
         elif args.which_direction == 'BtoA':
-            sample_files = glob('./datasets/{}/*.*'.format(self.dataset_dir + '/testB'))
+            sample_files = glob('{}/{}/*.*'.format(self.dataset_root, self.dataset_dir + '/testB'))
         else:
             raise Exception('--which_direction must be AtoB or BtoA')
 
@@ -244,21 +248,31 @@ class cyclegan(object):
         index.write("<html><body><table><tr>")
         index.write("<th>name</th><th>input</th><th>output</th></tr>")
 
+        if not os.path.exists(os.path.join(args.test_dir, 'input')):
+            os.makedirs(os.path.join(args.test_dir, 'input'))
+        if not os.path.exists(os.path.join(args.test_dir, 'output')):
+            os.makedirs(os.path.join(args.test_dir, 'output'))
+
         out_var, in_var = (self.testB, self.test_A) if args.which_direction == 'AtoB' else (
             self.testA, self.test_B)
 
         for sample_file in sample_files:
             print('Processing image: ' + sample_file)
-            sample_image = [load_test_data(sample_file, args.fine_size)]
+            sample_image = [load_test_data(sample_file, args.load_size, args.fine_size)]
             sample_image = np.array(sample_image).astype(np.float32)
-            image_path = os.path.join(args.test_dir,
+            image_path_input = os.path.join(args.test_dir,'input',
                                       '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
+            image_path_output = os.path.join(args.test_dir,'output',
+                                      '{0}_{1}'.format(args.which_direction, os.path.basename(sample_file)))
+            image_path_input = os.path.splitext(image_path_input)[0] + '.png'
+            image_path_output = os.path.splitext(image_path_output)[0] + '.png'
             fake_img = self.sess.run(out_var, feed_dict={in_var: sample_image})
-            save_images(fake_img, [1, 1], image_path)
-            index.write("<td>%s</td>" % os.path.basename(image_path))
-            index.write("<td><img src='%s'></td>" % (sample_file if os.path.isabs(sample_file) else (
-                '..' + os.path.sep + sample_file)))
-            index.write("<td><img src='%s'></td>" % (image_path if os.path.isabs(image_path) else (
-                '..' + os.path.sep + image_path)))
+            save_images(sample_image, [1, 1], image_path_input)
+            save_images(fake_img, [1, 1], image_path_output)
+            index.write("<td>%s</td>" % os.path.basename(image_path_input))
+            index.write("<td><img src='%s'></td>" % (os.path.join('./input', os.path.basename(image_path_input))))
+            index.write("<td><img src='%s'></td>" % (os.path.join('./output', os.path.basename(image_path_output))))
             index.write("</tr>")
+        index.write("</table>")
+        index.write("</body></html>")
         index.close()

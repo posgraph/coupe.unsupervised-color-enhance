@@ -7,6 +7,17 @@ import pprint
 import scipy.misc
 import numpy as np
 import copy
+from skimage import color
+import os
+
+def to_Lab(I):
+    # AB 98.2330538631 -86.1830297444 94.4781222765 -107.857300207
+    lab = color.rgb2lab(I)
+    l = (lab[:, :, 0] / 100.0) * 255.0    # L component ranges from 0 to 100
+    a = (lab[:, :, 1] + 86.1830297444) / (98.2330538631 + 86.1830297444) * 255.0         # a component ranges from -127 to 127
+    b = (lab[:, :, 2] + 107.857300207) / (94.4781222765 + 107.857300207) * 255.0         # b component ranges from -127 to 127
+    # return np.dstack([l, a, b]).astype(np.uint8)
+    return np.dstack([l, a, b])
 
 pp = pprint.PrettyPrinter()
 
@@ -38,30 +49,52 @@ class ImagePool(object):
         else:
             return image
 
-def load_test_data(image_path, fine_size=256):
+def load_test_data(image_path, load_size=512, fine_size=256):
     img = imread(image_path)
-    img = scipy.misc.imresize(img, [fine_size, fine_size])
+    # img = __scale_shortest(img, load_size)
+    h, w, c = img.shape
+    img = img[:h-(h%4),:w-(w%4)]
+    # img = scipy.misc.imresize(img, [fine_size, fine_size])
+    img = to_Lab(img)
     img = img/127.5 - 1
     return img
 
-def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
-    img_A = imread(image_path[0])
+def rgb2gray3(image):
+    g = color.rgb2gray(image)
+    rgb = np.stack((g, g, g)).transpose((1,2,0))
+    return rgb
+
+def load_train_data(image_path, load_size=512, fine_size=256, is_testing=False):
+    img_A = rgb2gray3(imread(image_path[0]))
     img_B = imread(image_path[1])
     if not is_testing:
-        img_A = scipy.misc.imresize(img_A, [load_size, load_size])
-        img_B = scipy.misc.imresize(img_B, [load_size, load_size])
-        h1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
-        w1 = int(np.ceil(np.random.uniform(1e-2, load_size-fine_size)))
+        img_A = __scale_shortest(img_A, load_size)
+        img_B = __scale_shortest(img_B, load_size)
+        ah, aw, ac = img_A.shape
+        bh, bw, bc = img_B.shape
+        h1 = int(np.floor(np.random.uniform(1e-2, ah-fine_size)))
+        w1 = int(np.floor(np.random.uniform(1e-2, aw-fine_size)))
+        h2 = int(np.floor(np.random.uniform(1e-2, bh-fine_size)))
+        w2 = int(np.floor(np.random.uniform(1e-2, bw-fine_size)))
         img_A = img_A[h1:h1+fine_size, w1:w1+fine_size]
-        img_B = img_B[h1:h1+fine_size, w1:w1+fine_size]
-
+        img_B = img_B[h2:h2+fine_size, w2:w2+fine_size]
         if np.random.random() > 0.5:
             img_A = np.fliplr(img_A)
             img_B = np.fliplr(img_B)
     else:
-        img_A = scipy.misc.imresize(img_A, [fine_size, fine_size])
-        img_B = scipy.misc.imresize(img_B, [fine_size, fine_size])
+        img_A = __scale_shortest(img_A, load_size)
+        img_B = __scale_shortest(img_B, load_size)
+        ah, aw, ac = img_A.shape
+        bh, bw, bc = img_B.shape
+        h1 = int(np.floor(np.random.uniform(1e-2, ah-fine_size)))
+        w1 = int(np.floor(np.random.uniform(1e-2, aw-fine_size)))
+        h2 = int(np.floor(np.random.uniform(1e-2, bh-fine_size)))
+        w2 = int(np.floor(np.random.uniform(1e-2, bw-fine_size)))
+        img_A = img_A[h1:h1+fine_size, w1:w1+fine_size]
+        img_B = img_B[h2:h2+fine_size, w2:w2+fine_size]
 
+    img_A = to_Lab(img_A)
+    img_B = to_Lab(img_B)
     img_A = img_A/127.5 - 1.
     img_B = img_B/127.5 - 1.
 
@@ -69,6 +102,20 @@ def load_train_data(image_path, load_size=286, fine_size=256, is_testing=False):
     # img_AB shape: (fine_size, fine_size, input_c_dim + output_c_dim)
     return img_AB
 
+def __scale_shortest(img, target_shortest):
+    oh, ow, oc = img.shape
+    if ow > oh: # set oh to target_shortest
+        # if (oh == target_shortest):
+        #     return img
+        h = target_shortest
+        w = int(target_shortest * ow / oh)
+        return scipy.misc.imresize(img, [h, w], 'bicubic')
+    else: # set ow to target_shortest
+        # if (ow == target_shortest):
+        #     return img
+        w = target_shortest
+        h = int(target_shortest * oh / ow)
+        return scipy.misc.imresize(img, [h, w], 'bicubic')
 # -----------------------------
 
 def get_image(image_path, image_size, is_crop=True, resize_w=64, is_grayscale = False):
@@ -81,7 +128,7 @@ def imread(path, is_grayscale = False):
     if (is_grayscale):
         return scipy.misc.imread(path, flatten = True).astype(np.float)
     else:
-        return scipy.misc.imread(path, mode='RGB').astype(np.float)
+        return scipy.misc.imread(path, mode='RGB').astype(np.uint8)
 
 def merge_images(images, size):
     return inverse_transform(images)
@@ -93,11 +140,11 @@ def merge(images, size):
         i = idx % size[1]
         j = idx // size[1]
         img[j*h:j*h+h, i*w:i*w+w, :] = image
-
+    img = to_RGB(img)
     return img
 
 def imsave(images, size, path):
-    return scipy.misc.imsave(path, merge(images, size))
+    return scipy.misc.imsave(path, scipy.misc.toimage(merge(images, size)*255, cmin=0, cmax=255))
 
 def center_crop(x, crop_h, crop_w,
                 resize_h=64, resize_w=64):
@@ -116,6 +163,15 @@ def transform(image, npx=64, is_crop=True, resize_w=64):
     else:
         cropped_image = image
     return np.array(cropped_image)/127.5 - 1.
+
+def to_RGB(I):
+    # print(I)
+    l = I[:, :, 0] * 100.0
+    a = I[:, :, 1] * (98.2330538631 + 86.1830297444) - 86.1830297444
+    b = I[:, :, 2] * (94.4781222765 + 107.857300207) - 107.857300207
+    # print(np.dstack([l, a, b]))
+    rgb = color.lab2rgb(np.dstack([l, a, b]).astype(np.float64))
+    return rgb
 
 def inverse_transform(images):
     return (images+1.)/2.
