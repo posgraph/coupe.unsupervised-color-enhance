@@ -50,3 +50,13 @@ CUDA_VISIBLE_DEVICES=0 python main.py --dataset_dir=/path/to/data/ --phase=test 
 - The tensorflow implementation of CyelcGAN (which this repository forked from), https://github.com/xhujoy/CycleGAN-tensorflow
 - The torch implementation of CycleGAN, https://github.com/junyanz/CycleGAN
 - The tensorflow implementation of pix2pix, https://github.com/yenchenlin/pix2pix-tensorflow
+
+## About Coupe Project ##
+Project ‘COUPE’ aims to develop software that evaluates and improves the quality of images and videos based on big visual data. To achieve the goal, we extract sharpness, color, composition features from images and develop technologies for restoring and improving by using it. In addition, personalization technology through user preference analysis is under study.  
+  
+Please checkout out other Coupe repositories in our [Posgraph](https://github.com/posgraph) github organization.
+
+## Useful Links ##
+
+  * [Coupe Library](http://coupe.postech.ac.kr/)
+  * [POSTECH CG Lab.](http://cg.postech.ac.kr/)
