@@ -33,6 +33,11 @@ Pretrained network model and dataset will be distributed soon.
 git clone https://github.com/JunhoJeon/unsupervised-color-enhance
 cd CycleGAN-tensorflow
 ```
+## Main Files ##
+  * [main.py](main.py): Main training/testing code
+  * [model.py](model.py): CycleGAN model code for training and testing
+  * [module.py](module.py): Defining network structure (affine transformation network)
+  * [train.sh](train.sh): Training shell script for parameterized training
 
 ## Training and Test Details
 To train a model,  
