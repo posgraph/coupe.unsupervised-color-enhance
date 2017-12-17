@@ -56,6 +56,11 @@ CUDA_VISIBLE_DEVICES=0 python main.py --dataset_dir=/path/to/data/ --phase=test 
 - The torch implementation of CycleGAN, https://github.com/junyanz/CycleGAN
 - The tensorflow implementation of pix2pix, https://github.com/yenchenlin/pix2pix-tensorflow
 
+## License ##
+This software is being made available under the terms in the [LICENSE](LICENSE) file.
+
+Any exemptions to these terms requires a license from the Pohang University of Science and Technology.
+
 ## About Coupe Project ##
 Project ‘COUPE’ aims to develop software that evaluates and improves the quality of images and videos based on big visual data. To achieve the goal, we extract sharpness, color, composition features from images and develop technologies for restoring and improving by using it. In addition, personalization technology through user preference analysis is under study.  
   
